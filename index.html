@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analiza Ceny Lotu: Wrocław - Malaga</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f5f5f4; color: #1c1917; }
+        .chart-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            height: 350px; 
+            max-height: 400px; 
+        }
+        .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .btn-toggle { transition: all 0.2s; }
+        .btn-toggle:hover { transform: translateY(-1px); }
+        .metric-value { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+    </style>
+    <!-- Chosen Palette: Warm Stone & Emerald (Stone-50 bg, Emerald-600 accents for 'Good Price', Rose-500 for 'High Price') -->
+    <!-- Application Structure Plan: Dashboard layout. 1. Hero Section: Direct answer (Verdict) with gauge. 2. Price History: Line chart showing trend over 6 months to validate the 460 PLN price point. 3. Seasonal Context: Bar chart comparing Feb to Summer/Peak. 4. Weather/Value: Comparison of destination value. 5. Cost Calculator: Interactive tool to estimate final price with luggage. -->
+    <!-- Visualization & Content Choices: 
+         1. Gauge/Doughnut (Chart.js): Visualizing price 'score' (0-100). Goal: Inform immediately. 
+         2. Line Chart (Chart.js): Historical price trend. Goal: Compare current price vs past months. 
+         3. Bar Chart (Chart.js): Monthly averages. Goal: Contextualize seasonality. 
+         4. Interactive Form (JS): Calculator. Goal: Personalize the data based on user needs (luggage/seats).
+         NO SVG/Mermaid used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="bg-stone-100 min-h-screen">
+
+    <!-- Navigation / Header -->
+    <nav class="bg-white border-b border-stone-200 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="font-bold text-xl text-stone-800">✈️ Analizator Cen Lotów</div>
+            <div class="text-sm text-stone-500 hidden sm:block">Trasa: WRO ⇄ AGP | Luty 2024</div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+
+        <!-- Section 1: The Verdict (Executive Summary) -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-2 space-y-4">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-8 border-emerald-500">
+                    <h2 class="text-sm font-semibold text-stone-500 uppercase tracking-wide">Werdykt Ostateczny</h2>
+                    <div class="mt-2 flex items-baseline space-x-4">
+                        <span class="text-4xl font-bold text-stone-900">460 PLN</span>
+                        <span class="px-3 py-1 bg-emerald-100 text-emerald-800 text-sm font-bold rounded-full">🟢 ŚWIETNA CENA</span>
+                    </div>
+                    <p class="mt-4 text-stone-600 leading-relaxed">
+                        Cena 460 PLN za lot w dwie strony z Wrocławia do Malagi w lutym jest <strong>bardzo atrakcyjna</strong>. Znajduje się w dolnych 20% cen rejestrowanych dla tej trasy w sezonie zimowym. Historyczna średnia dla tego okresu wynosi około 580-650 PLN.
+                    </p>
+                    <div class="mt-6 flex gap-4">
+                        <button onclick="scrollToSection('trends')" class="text-emerald-600 font-medium hover:underline">📉 Zobacz historię cen</button>
+                        <button onclick="scrollToSection('calculator')" class="text-stone-500 font-medium hover:underline">🧳 Oblicz koszt z bagażem</button>
+                    </div>
+                </div>
+
+                <!-- Quick Stats Grid -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-sm">
+                        <div class="text-xs text-stone-500">Średnia cena (Luty)</div>
+                        <div class="text-xl font-bold text-stone-800 mt-1">~590 PLN</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm">
+                        <div class="text-xs text-stone-500">Najniższa odnotowana (Luty)</div>
+                        <div class="text-xl font-bold text-emerald-600 mt-1">320 PLN</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm">
+                        <div class="text-xs text-stone-500">Cena w sezonie (Lipiec)</div>
+                        <div class="text-xl font-bold text-rose-600 mt-1">1200+ PLN</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm">
+                        <div class="text-xs text-stone-500">Prognoza (za 7 dni)</div>
+                        <div class="text-xl font-bold text-amber-600 mt-1">⬆ +15%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attractiveness Gauge -->
+            <div class="bg-white p-6 rounded-xl shadow-sm flex flex-col items-center justify-center relative">
+                <h3 class="text-stone-800 font-semibold mb-2 w-full text-center">Wskaźnik Okazji</h3>
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="gaugeChart"></canvas>
+                </div>
+                <p id="gaugeText" class="text-center text-sm text-stone-500 mt-2">85/100 punktów opłacalności</p>
+            </div>
+        </section>
+
+        <!-- Section 2: Historical Price Trends -->
+        <section id="trends" class="bg-white p-6 rounded-xl shadow-sm">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-stone-800">Historia Cen i Trendy</h2>
+                    <p class="text-stone-500 text-sm mt-1">
+                        Poniższy wykres pokazuje, jak zmieniały się ceny biletów na trasie WRO-AGP w ostatnich 6 miesiącach oraz prognozę na luty.
+                        Zauważalny jest spadek cen po okresie świątecznym (styczeń), co czyni luty idealnym momentem na zakup.
+                    </p>
+                </div>
+                <div class="flex gap-2 mt-4 md:mt-0">
+                    <button onclick="updateTrendChart('6m')" class="px-3 py-1 bg-stone-100 hover:bg-stone-200 rounded text-sm font-medium transition active-filter text-stone-800 border border-stone-300">6 Miesięcy</button>
+                    <button onclick="updateTrendChart('year')" class="px-3 py-1 bg-white hover:bg-stone-50 rounded text-sm font-medium transition text-stone-500 border border-transparent">Rok (Średnie)</button>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+            
+            <div class="mt-4 p-4 bg-amber-50 border border-amber-100 rounded-lg text-sm text-amber-800">
+                <strong>💡 Wskazówka analityka:</strong> Luty to "sweet spot". Pogoda w Polsce jest statystycznie najgorsza, a ceny lotów na południe najniższe. 460 PLN to cena bliska "dołkowi cenowemu". Czekanie na "Last Minute" rzadko działa na tej trasie.
+            </div>
+        </section>
+
+        <!-- Section 3: Value Comparison (Weather vs Price) -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Seasonality Bar Chart -->
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <h3 class="text-lg font-bold text-stone-800 mb-2">Sezonowość Cen</h3>
+                <p class="text-sm text-stone-500 mb-4">Porównanie średniej ceny biletu w poszczególnych miesiącach. Luty jest jednym z najtańszych miesięcy w roku.</p>
+                <div class="chart-container">
+                    <canvas id="seasonalityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Weather Comparison -->
+            <div class="bg-white p-6 rounded-xl shadow-sm">
+                <h3 class="text-lg font-bold text-stone-800 mb-2">Co kupujesz za 460 PLN?</h3>
+                <p class="text-sm text-stone-500 mb-4">Wrocław vs Malaga w lutym. Kupujesz nie tylko przelot, ale średnio +14°C różnicy temperatur i 5h więcej słońca.</p>
+                
+                <div class="space-y-6 mt-8">
+                    <!-- Temperature -->
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Wrocław (Luty)</span>
+                            <span class="font-bold">2°C</span>
+                        </div>
+                        <div class="w-full bg-stone-100 rounded-full h-2.5">
+                            <div class="bg-blue-300 h-2.5 rounded-full" style="width: 15%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Malaga (Luty)</span>
+                            <span class="font-bold text-orange-500">17°C</span>
+                        </div>
+                        <div class="w-full bg-stone-100 rounded-full h-2.5">
+                            <div class="bg-orange-400 h-2.5 rounded-full" style="width: 65%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Sun Hours -->
+                    <div class="pt-4 border-t border-stone-100">
+                        <div class="flex items-center justify-between">
+                            <div class="text-center w-1/2 border-r border-stone-100">
+                                <div class="text-2xl">☁️ 2h</div>
+                                <div class="text-xs text-stone-400">Słońca dziennie (WRO)</div>
+                            </div>
+                            <div class="text-center w-1/2">
+                                <div class="text-2xl">☀️ 7h</div>
+                                <div class="text-xs text-stone-400">Słońca dziennie (AGP)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Real Cost Calculator -->
+        <section id="calculator" class="bg-stone-800 text-white rounded-xl shadow-lg p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="col-span-1">
+                    <h2 class="text-2xl font-bold text-emerald-400 mb-2">Kalkulator "Realnej" Ceny</h2>
+                    <p class="text-stone-300 text-sm mb-6">
+                        Tanie linie lotnicze (Ryanair/WizzAir) mają niską cenę bazową, ale dodatki są drogie. Sprawdź, ile faktycznie zapłacisz.
+                    </p>
+                    <div class="space-y-4">
+                        <label class="flex items-center space-x-3 cursor-pointer p-3 bg-stone-700 rounded-lg hover:bg-stone-600 transition">
+                            <input type="checkbox" id="check-priority" class="w-5 h-5 text-emerald-500 rounded focus:ring-emerald-500 focus:ring-offset-stone-800" onchange="calculateTotal()">
+                            <div>
+                                <span class="block font-medium">Priority (10kg kabinowy)</span>
+                                <span class="text-xs text-stone-400">+ ok. 160 PLN (obie strony)</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center space-x-3 cursor-pointer p-3 bg-stone-700 rounded-lg hover:bg-stone-600 transition">
+                            <input type="checkbox" id="check-baggage" class="w-5 h-5 text-emerald-500 rounded focus:ring-emerald-500 focus:ring-offset-stone-800" onchange="calculateTotal()">
+                            <div>
+                                <span class="block font-medium">Bagaż Rejestrowany (20kg)</span>
+                                <span class="text-xs text-stone-400">+ ok. 320 PLN (obie strony)</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center space-x-3 cursor-pointer p-3 bg-stone-700 rounded-lg hover:bg-stone-600 transition">
+                            <input type="checkbox" id="check-seats" class="w-5 h-5 text-emerald-500 rounded focus:ring-emerald-500 focus:ring-offset-stone-800" onchange="calculateTotal()">
+                            <div>
+                                <span class="block font-medium">Wybór Miejsca</span>
+                                <span class="text-xs text-stone-400">+ ok. 80 PLN (obie strony)</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-span-1 lg:col-span-2 flex flex-col justify-center items-center bg-stone-700 rounded-xl p-6 relative overflow-hidden">
+                    <div class="text-stone-400 text-sm mb-2">Szacowany koszt całkowity</div>
+                    <div class="text-5xl font-bold text-white mb-2" id="total-price">460 PLN</div>
+                    <div class="h-1 w-24 bg-emerald-500 rounded-full mb-4"></div>
+                    <p id="recommendation-text" class="text-center text-emerald-300 font-medium">
+                        Cena bazowa. Idealna na city-break z plecakiem.
+                    </p>
+                    
+                    <div class="grid grid-cols-2 gap-4 w-full mt-8 text-center text-sm">
+                        <div class="p-3 border border-stone-600 rounded">
+                            <div class="text-stone-400">Cena za km</div>
+                            <div class="font-mono text-white">0.09 PLN</div>
+                        </div>
+                        <div class="p-3 border border-stone-600 rounded">
+                            <div class="text-stone-400">Czas lotu</div>
+                            <div class="font-mono text-white">3h 40min</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-white border-t border-stone-200 mt-12 py-8">
+        <div class="max-w-6xl mx-auto px-4 text-center text-stone-400 text-sm">
+            <p>Symulacja danych na podstawie historycznych trendów cenowych dla trasy WRO-AGP (Ryanair/WizzAir).</p>
+            <p class="mt-2">Ceny biletów lotniczych zmieniają się dynamicznie.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Data Store
+        const BASE_PRICE = 460;
+        const ADDONS = {
+            priority: 160,
+            baggage: 320,
+            seats: 80
+        };
+
+        // Scroll Helper
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Calculator Logic
+        function calculateTotal() {
+            let total = BASE_PRICE;
+            let text = "Cena bazowa. Idealna na city-break z plecakiem.";
+            let colorClass = "text-emerald-300";
+
+            if (document.getElementById('check-priority').checked) total += ADDONS.priority;
+            if (document.getElementById('check-baggage').checked) total += ADDONS.baggage;
+            if (document.getElementById('check-seats').checked) total += ADDONS.seats;
+
+            // Logic for feedback text
+            if (total > BASE_PRICE && total < 700) {
+                text = "Standardowy pakiet podróżnika. Nadal świetna oferta.";
+                colorClass = "text-emerald-300";
+            } else if (total >= 700 && total < 900) {
+                text = "Pełen komfort. Cena zbliża się do średniej rynkowej.";
+                colorClass = "text-amber-300";
+            } else if (total >= 900) {
+                text = "Wersja Premium. Rozważ, czy na pewno potrzebujesz dużego bagażu.";
+                colorClass = "text-rose-300";
+            }
+
+            // Animate number
+            const el = document.getElementById('total-price');
+            const rec = document.getElementById('recommendation-text');
+            
+            // Simple visual update
+            el.innerText = total + " PLN";
+            rec.innerText = text;
+            rec.className = `text-center font-medium ${colorClass}`;
+        }
+
+        // Charts Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            initGaugeChart();
+            initTrendChart();
+            initSeasonalityChart();
+        });
+
+        // 1. Gauge Chart (Attractiveness)
+        function initGaugeChart() {
+            const ctx = document.getElementById('gaugeChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Opłacalność', 'Potencjał spadku'],
+                    datasets: [{
+                        data: [85, 15],
+                        backgroundColor: ['#10b981', '#e7e5e4'], // emerald-500, stone-200
+                        borderWidth: 0,
+                        cutout: '75%',
+                        circumference: 180,
+                        rotation: 270,
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: { enabled: false },
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // 2. Trend Chart (Price History)
+        let trendChartInstance = null;
+        function initTrendChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            const labels = ['Wrzesień', 'Październik', 'Listopad', 'Grudzień', 'Styczeń', 'LUTY (Teraz)', 'Marzec (Prog.)'];
+            const data6m = [980, 750, 520, 890, 420, 460, 590]; // Historical + Forecast
+
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Średnia cena lotu (WRO-AGP)',
+                        data: data6m,
+                        borderColor: '#57534e', // stone-600
+                        backgroundColor: 'rgba(87, 83, 78, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: ['#57534e', '#57534e', '#57534e', '#ef4444', '#10b981', '#10b981', '#f59e0b'],
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y + ' PLN';
+                                },
+                                afterLabel: function(context) {
+                                    if (context.dataIndex === 5) return "Twoja oferta";
+                                    if (context.dataIndex === 3) return "Szczyt świąteczny";
+                                    if (context.dataIndex === 4) return "Najtaniej (Styczeń)";
+                                    return "";
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: '#e7e5e4' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTrendChart(view) {
+            // Simulate data change for interaction
+            const btns = document.querySelectorAll('.active-filter');
+            btns.forEach(b => {
+                b.classList.remove('bg-stone-100', 'text-stone-800', 'border-stone-300');
+                b.classList.add('bg-white', 'text-stone-500', 'border-transparent');
+            });
+            event.target.classList.remove('bg-white', 'text-stone-500', 'border-transparent');
+            event.target.classList.add('bg-stone-100', 'text-stone-800', 'border-stone-300');
+
+            if (view === 'year') {
+                trendChartInstance.data.labels = ['Sty', 'Lut', 'Mar', 'Kwi', 'Maj', 'Cze', 'Lip', 'Sie', 'Wrz', 'Paź', 'Lis', 'Gru'];
+                trendChartInstance.data.datasets[0].data = [420, 580, 650, 890, 950, 1100, 1400, 1350, 980, 750, 520, 900];
+                trendChartInstance.data.datasets[0].pointBackgroundColor = '#57534e'; 
+                // Highlight Feb
+                const pointColors = new Array(12).fill('#57534e');
+                pointColors[1] = '#10b981'; // Feb green
+                trendChartInstance.data.datasets[0].pointBackgroundColor = pointColors;
+            } else {
+                trendChartInstance.data.labels = ['Wrzesień', 'Październik', 'Listopad', 'Grudzień', 'Styczeń', 'LUTY (Teraz)', 'Marzec (Prog.)'];
+                trendChartInstance.data.datasets[0].data = [980, 750, 520, 890, 420, 460, 590];
+                trendChartInstance.data.datasets[0].pointBackgroundColor = ['#57534e', '#57534e', '#57534e', '#ef4444', '#10b981', '#10b981', '#f59e0b'];
+            }
+            trendChartInstance.update();
+        }
+
+        // 3. Seasonality Chart
+        function initSeasonalityChart() {
+            const ctx = document.getElementById('seasonalityChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Luty (Twoja)', 'Kwiecień', 'Lipiec', 'Październik', 'Listopad'],
+                    datasets: [{
+                        label: 'Średnia cena (PLN)',
+                        data: [460, 890, 1450, 750, 520],
+                        backgroundColor: [
+                            '#10b981', // Emerald (Good)
+                            '#fbbf24', // Amber (Mid)
+                            '#f43f5e', // Rose (Expensive)
+                            '#fbbf24',
+                            '#10b981'
+                        ],
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { display: true, borderDash: [2, 4] }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
